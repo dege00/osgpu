@@ -1,0 +1,11 @@
+osgpu.dukon.tech {
+	encode gzip
+	reverse_proxy web:80
+}
+
+:80 {
+	@osgpu host osgpu.dukon.tech
+	redir @osgpu https://{host}{uri} permanent
+	encode gzip
+	reverse_proxy web:80
+}
