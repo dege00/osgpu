@@ -18,9 +18,6 @@ export default defineConfig(({ command, mode }) => {
           name: 'Assistec', short_name: 'Assistec', lang: 'pt-BR',
           description: 'Gestão para assistência técnica',
           theme_color: '#13201C', background_color: '#F3F4EF', display: 'standalone', start_url: '/',
-          icons: [
-            { src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
-          ],
         },
         workbox: { navigateFallbackDenylist: [/^\/api/, /^\/media/, /^\/admin/] },
       }),

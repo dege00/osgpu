@@ -60,7 +60,7 @@ export async function api(path, { method = 'GET', body, form, blob } = {}, retry
   if (r.status === 204) return null
   if (!r.ok) {
     const data = await r.json().catch(() => null)
-    const msg = data?.detail || (data && Object.entries(data).map(([k, v]) => `${k}: ${[].concat(v).join(' ')}`).join(' | ')) || 'Erro inesperado'
+    const msg = data?.detail || (data && Object.entries(data).map(([k, v]) => (k === 'non_field_errors' ? '' : k + ': ') + [].concat(v).join(' ')).filter(Boolean).join(' | ')) || 'Erro inesperado'
     const erro = new Error(msg)
     erro.status = r.status
     throw erro
