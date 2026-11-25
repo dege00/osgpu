@@ -1,0 +1,2 @@
+# Scripts shell precisam de fim de linha LF mesmo em máquinas Windows
+*.sh text eol=lf
