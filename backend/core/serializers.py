@@ -7,7 +7,7 @@ from rest_framework import serializers
 from .fields import RelativeImageField
 from .imagens import MAX_IMAGEM_BYTES, erro_imagem, reduzir_imagem, validar_imagem
 from .permissoes import ordens_visiveis
-from .models import Cliente, FotoOS, HistoricoStatus, ItemOS, Lancamento, Loja, OrdemServico, Peca, Usuario
+from .models import Cliente, FotoOS, HistoricoStatus, ItemChecklist, ItemOS, Lancamento, Loja, OrdemServico, Peca, Usuario
 
 
 class ImagemLimitada(RelativeImageField):
@@ -113,6 +113,39 @@ class PecaSerializer(serializers.ModelSerializer):
         return data
 
 
+class ItemChecklistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemChecklist
+        fields = ["id", "categoria", "nome", "ordem"]
+        extra_kwargs = {"ordem": {"read_only": True}}
+
+    def validate_nome(self, valor):
+        nome = valor.strip()
+        if not nome:
+            raise serializers.ValidationError("Informe o nome do item.")
+        if len(nome) > 80:
+            raise serializers.ValidationError("O nome pode ter no máximo 80 caracteres.")
+        request = self.context.get("request")
+        loja_id = request.user.loja_id if request else None
+        categoria = self.initial_data.get("categoria") or getattr(self.instance, "categoria", None)
+        if loja_id and categoria:
+            iguais = ItemChecklist.objects.filter(loja_id=loja_id, categoria=categoria, nome__iexact=nome)
+            if self.instance:
+                iguais = iguais.exclude(pk=self.instance.pk)
+            if iguais.exists():
+                raise serializers.ValidationError("Já existe um item com esse nome.")
+        return nome
+
+    def validate(self, data):
+        if self.instance:
+            return data
+        request = self.context.get("request")
+        categoria = data.get("categoria")
+        if request and categoria and ItemChecklist.objects.filter(loja_id=request.user.loja_id, categoria=categoria).count() >= 40:
+            raise serializers.ValidationError("Limite de 40 itens por categoria.")
+        return data
+
+
 class ItemOSSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
 
@@ -191,12 +224,14 @@ class OSSerializer(serializers.ModelSerializer):
     custo = serializers.SerializerMethodField()
     lucro = serializers.SerializerMethodField()
     pago = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    checklist_itens = serializers.JSONField(required=False)
+    observacao_entrada = serializers.CharField(required=False, allow_blank=True, max_length=2000)
 
     class Meta:
         model = OrdemServico
         fields = ["id", "numero", "cliente", "cliente_nome", "cliente_telefone", "tecnico", "categoria", "tipo_aparelho",
                   "marca", "modelo", "numero_serie", "imei", "senha_aparelho", "acessorios", "defeito", "laudo",
-                  "checklist", "status",
+                  "checklist", "checklist_itens", "observacao_entrada", "status",
                   "status_label", "token", "assinatura", "desconto", "garantia_dias", "previsao_entrega",
                   "criado_em", "atualizado_em", "entregue_em", "itens", "fotos", "historico", "subtotal", "total",
                   "custo", "lucro", "pago"]
@@ -232,7 +267,43 @@ class OSSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Só administrador ou atendente aplica desconto.")
         return valor
 
+    def validate_checklist_itens(self, valor):
+        if self.instance:
+            return self.instance.checklist_itens
+        if not isinstance(valor, list):
+            raise serializers.ValidationError("Checklist inválido: envie uma lista de itens.")
+        if len(valor) > 60:
+            raise serializers.ValidationError("O checklist pode ter no máximo 60 itens respondidos.")
+        limpos = []
+        for item in valor:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError("Cada item do checklist deve ter nome e resposta.")
+            if set(item) - {"nome", "resposta"}:
+                raise serializers.ValidationError("Formato inválido no checklist: use apenas nome e resposta.")
+            nome, resposta = item.get("nome"), item.get("resposta")
+            if not isinstance(nome, str):
+                raise serializers.ValidationError("Nome do item inválido.")
+            nome = nome.strip()
+            if not nome or len(nome) > 80:
+                raise serializers.ValidationError("Nome do item deve ter de 1 a 80 caracteres.")
+            if resposta not in ("sim", "nao"):
+                raise serializers.ValidationError("Resposta inválida: use sim ou nao.")
+            limpos.append({"nome": nome, "resposta": resposta})
+        return limpos
+
+    def validate_observacao_entrada(self, valor):
+        if self.instance:
+            return self.instance.observacao_entrada
+        if not isinstance(valor, str):
+            raise serializers.ValidationError("Observações inválidas.")
+        if len(valor.strip()) > 2000:
+            raise serializers.ValidationError("As observações podem ter no máximo 2000 caracteres.")
+        return valor.strip()
+
     def validate(self, data):
+        if self.instance:
+            data.pop("checklist_itens", None)
+            data.pop("observacao_entrada", None)
         categoria = data.get(
             "categoria", getattr(self.instance, "categoria", OrdemServico.Categoria.OUTRO)
         )

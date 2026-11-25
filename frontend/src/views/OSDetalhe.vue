@@ -15,6 +15,7 @@ const forma = ref('pix'), valorPagamento = ref('')
 const itemEdit = reactive({ id: null, quantidade: 1, valor_unitario: '' })
 const admin = computed(() => auth.user?.cargo === 'admin')
 const restante = computed(() => os.value ? Number(os.value.total) - Number(os.value.pago) : 0)
+const checklistItens = computed(() => Array.isArray(os.value?.checklist_itens) ? os.value.checklist_itens : [])
 const wrap = (fn) => async (...a) => { erro.value = ''; msg.value = ''; try { await fn(...a) } catch (e) { erro.value = e.message } }
 
 const carregar = wrap(async () => { os.value = await api(`/os/${route.params.id}/`) })
@@ -149,7 +150,11 @@ const linkPublico = computed(() => os.value ? `${location.origin}/r/${os.value.t
       <p>{{ os.tipo_aparelho }} {{ os.marca }} {{ os.modelo }}<template v-if="os.numero_serie"> <span class="mudo">· Nº de série {{ os.numero_serie }}</span></template><template v-if="os.imei"> <span class="mudo">· IMEI {{ os.imei }}</span></template><br />
         <strong>Defeito:</strong> {{ os.defeito }}<br />
         <span class="mudo">Entrada {{ dataHoraBR(os.criado_em) }} · Previsão {{ dataBR(os.previsao_entrega) }}<template v-if="os.senha_aparelho"> · Senha: {{ os.senha_aparelho }}</template></span></p>
-      <div v-if="os.checklist" class="checklist-texto">{{ os.checklist }}</div>
+      <div v-if="checklistItens.length || os.checklist || os.observacao_entrada" class="checklist-respostas">
+        <p v-for="(i, idx) in checklistItens" :key="idx"><strong>{{ i.nome }}:</strong> {{ i.resposta === 'sim' ? 'Sim' : 'Não' }}</p>
+        <template v-if="os.checklist"><p class="mudo">Checklist anterior:</p><div class="checklist-texto">{{ os.checklist }}</div></template>
+        <p v-if="os.observacao_entrada"><strong>Observações:</strong> {{ os.observacao_entrada }}</p>
+      </div>
     </div>
 
     <div class="card">

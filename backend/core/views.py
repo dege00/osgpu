@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import connection, transaction
-from django.db.models import Count, F, Sum
+from django.db.models import Count, F, Max, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -22,14 +22,19 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .estoque import baixar_estoque, baixar_itens, devolver_estoque, devolver_itens
 from .exportacao import exportar_clientes, exportar_pecas, resposta_xlsx
 from .imagens import processar_assinatura
-from .models import Cliente, FotoOS, ItemOS, Lancamento, OrdemServico, Peca, Usuario
+from .models import Cliente, FotoOS, ItemChecklist, ItemOS, Lancamento, Loja, OrdemServico, Peca, Usuario
 from .permissoes import ordens_visiveis
 from .pdf import gerar_pdf_os
-from .serializers import (ClienteSerializer, FotoSerializer, ItemOSSerializer, LancamentoSerializer, LojaSerializer,
-                          OSListaSerializer, OSSerializer, PecaSerializer, UsuarioSerializer)
+from .serializers import (ClienteSerializer, FotoSerializer, ItemChecklistSerializer, ItemOSSerializer,
+                          LancamentoSerializer, LojaSerializer, OSListaSerializer, OSSerializer, PecaSerializer,
+                          UsuarioSerializer)
 from .sessoes import invalidar_tokens
 
 FORMAS_PAGAMENTO = {"dinheiro", "pix", "debito", "credito", "outro"}
+CHECKLIST_PADRAO = {
+    OrdemServico.Categoria.CELULAR: ["Liga", "Tela sem danos", "Touch funciona", "Câmeras funcionam", "Carrega", "Áudio funciona"],
+    OrdemServico.Categoria.OUTRO: ["Liga", "Liga mas não dá vídeo", "Tem danos visíveis"],
+}
 
 
 def exigir_pagamento_para_pago(os_, novo):
@@ -74,6 +79,67 @@ class PecaViewSet(LojaViewSet):
     def por_codigo(self, request):
         p = self.get_queryset().filter(sku=request.query_params.get("codigo", "")).first()
         return Response(PecaSerializer(p, context={"request": request}).data) if p else Response(status=404)
+
+
+class ChecklistItemViewSet(LojaViewSet):
+    queryset = ItemChecklist.objects.all()
+    serializer_class = ItemChecklistSerializer
+    filterset_fields = ["categoria"]
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [TemLoja()]
+        return [SoAdmin()]
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("ordem", "id")
+
+    def _garantir_padrao(self, loja):
+        if loja.checklist_padrao_criado:
+            return
+        with transaction.atomic():
+            bloqueada = Loja.objects.select_for_update().get(pk=loja.pk)
+            if bloqueada.checklist_padrao_criado:
+                return
+            existentes = {
+                (categoria, nome.lower())
+                for categoria, nome in ItemChecklist.objects.filter(loja=bloqueada).values_list("categoria", "nome")
+            }
+            for categoria, nomes in CHECKLIST_PADRAO.items():
+                for ordem, nome in enumerate(nomes, start=1):
+                    if (categoria, nome.lower()) not in existentes:
+                        ItemChecklist.objects.create(loja=bloqueada, categoria=categoria, nome=nome, ordem=ordem)
+            bloqueada.checklist_padrao_criado = True
+            bloqueada.save(update_fields=["checklist_padrao_criado"])
+
+    def list(self, request, *args, **kwargs):
+        self._garantir_padrao(request.user.loja)
+        return super().list(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        loja = self.request.user.loja
+        categoria = serializer.validated_data["categoria"]
+        ultimo = ItemChecklist.objects.filter(loja=loja, categoria=categoria).aggregate(m=Max("ordem"))["m"] or 0
+        serializer.save(loja=loja, ordem=ultimo + 1)
+
+    @action(detail=False, methods=["post"])
+    def reordenar(self, request):
+        categoria = request.data.get("categoria")
+        ids = request.data.get("ids")
+        if categoria not in OrdemServico.Categoria.values:
+            raise ValidationError("Categoria inválida.")
+        if not isinstance(ids, list) or not ids or len(ids) > 40 or any(type(i) is not int for i in ids):
+            raise ValidationError("Lista de ids inválida.")
+        if len(set(ids)) != len(ids):
+            raise ValidationError("Ids repetidos não são permitidos.")
+        itens = {i.id: i for i in self.get_queryset().filter(categoria=categoria, id__in=ids)}
+        if len(itens) != len(ids):
+            raise ValidationError("Itens inválidos para esta loja e categoria.")
+        with transaction.atomic():
+            for ordem, item_id in enumerate(ids, start=1):
+                ItemChecklist.objects.filter(pk=item_id).update(ordem=ordem)
+        return Response({"ok": True})
 
 
 class OSViewSet(LojaViewSet):

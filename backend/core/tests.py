@@ -831,7 +831,7 @@ class SaudeTest(APITestCase):
 
 class MigracaoAparelhoTest(TransactionTestCase):
     migrate_from = [("core", "0003_fotoos_tipo_fotoos_visivel_cliente")]
-    migrate_to = [("core", "0004_aparelho_flexivel")]
+    migrate_to = [("core", "0008_loja_checklist_padrao_criado_and_more")]
 
     def setUp(self):
         self.executor = MigrationExecutor(connection)

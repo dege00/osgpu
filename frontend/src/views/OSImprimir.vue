@@ -8,6 +8,7 @@ const route = useRoute()
 const os = ref(null), erro = ref(''), papel = ref('80')
 const loja = computed(() => auth.user?.loja || {})
 const restante = computed(() => os.value ? Number(os.value.total) - Number(os.value.pago) : 0)
+const checklistItens = computed(() => Array.isArray(os.value?.checklist_itens) ? os.value.checklist_itens : [])
 const linkPublico = computed(() => os.value ? `${location.origin}/r/${os.value.token}` : '')
 function imprimir() { window.print() }
 
@@ -51,8 +52,17 @@ onMounted(async () => {
     <p v-if="os.imei"><strong>IMEI:</strong> {{ os.imei }}</p>
     <p><strong>Defeito:</strong> {{ os.defeito }}</p>
     <p v-if="os.laudo"><strong>Laudo:</strong> {{ os.laudo }}</p>
-    <p v-if="os.checklist"><strong>Checklist de entrada:</strong></p>
-    <p v-if="os.checklist" class="checklist">{{ os.checklist }}</p>
+    <template v-if="checklistItens.length || os.checklist || os.observacao_entrada">
+      <template v-if="checklistItens.length">
+        <p><strong>Checklist de entrada:</strong></p>
+        <p v-for="(i, idx) in checklistItens" :key="idx" class="checklist">{{ i.nome }}: {{ i.resposta === 'sim' ? 'Sim' : 'Não' }}</p>
+      </template>
+      <template v-if="os.checklist">
+        <p><strong>Checklist anterior:</strong></p>
+        <p class="checklist">{{ os.checklist }}</p>
+      </template>
+      <p v-if="os.observacao_entrada"><strong>Observações:</strong> {{ os.observacao_entrada }}</p>
+    </template>
     <hr />
     <table>
       <thead><tr><th>Item</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th></tr></thead>

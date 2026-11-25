@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import Cliente, FotoOS, HistoricoStatus, ItemOS, Lancamento, Loja, OrdemServico, Peca, Usuario
+from .models import Cliente, FotoOS, HistoricoStatus, ItemChecklist, ItemOS, Lancamento, Loja, OrdemServico, Peca, Usuario
 
 
 @admin.register(Loja)
@@ -22,5 +22,5 @@ class UsuarioAdmin(BaseUserAdmin):
     )
 
 
-for m in (Cliente, Peca, OrdemServico, ItemOS, FotoOS, Lancamento, HistoricoStatus):
+for m in (Cliente, Peca, ItemChecklist, OrdemServico, ItemOS, FotoOS, Lancamento, HistoricoStatus):
     admin.site.register(m)

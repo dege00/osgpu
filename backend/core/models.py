@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Max
+from django.db.models.functions import Lower
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -52,6 +53,7 @@ class Loja(models.Model):
     documento = models.CharField("CNPJ/CPF", max_length=20, blank=True)
     endereco = models.CharField(max_length=200, blank=True)
     termo_garantia = models.TextField(blank=True, default="Garantia de 90 dias sobre o serviço executado. Não cobre mau uso, queda ou contato com líquidos.")
+    checklist_padrao_criado = models.BooleanField(default=False)
     logo = models.ImageField(upload_to=caminho_logo, blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
@@ -139,6 +141,8 @@ class OrdemServico(PorLoja):
     defeito = models.TextField("Defeito relatado")
     laudo = models.TextField("Laudo técnico", blank=True)
     checklist = models.TextField("Estado do aparelho na entrada / checklist", blank=True)
+    checklist_itens = models.JSONField("Respostas do checklist na entrada", default=list, blank=True)
+    observacao_entrada = models.TextField("Observações da entrada", blank=True, default="")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EM_ANALISE)
     token = models.CharField(max_length=16, default=gerar_token, unique=True, editable=False)
     assinatura = models.ImageField(upload_to=caminho_assinatura, blank=True, null=True)
@@ -195,6 +199,21 @@ class OrdemServico(PorLoja):
 
     def __str__(self):
         return f"OS #{self.numero} - {self.cliente}"
+
+
+class ItemChecklist(PorLoja):
+    categoria = models.CharField(max_length=10, choices=OrdemServico.Categoria.choices)
+    nome = models.CharField(max_length=80)
+    ordem = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["ordem", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("nome"), "loja", "categoria", name="uniq_checklist_loja_cat_nome"),
+        ]
+
+    def __str__(self):
+        return self.nome
 
 
 class HistoricoStatus(models.Model):

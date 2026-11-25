@@ -7,6 +7,7 @@ from .tema import DesbloquearTema, RestaurarTema, TemaView
 router = DefaultRouter()
 router.register("clientes", views.ClienteViewSet)
 router.register("pecas", views.PecaViewSet)
+router.register("checklist-itens", views.ChecklistItemViewSet)
 router.register("os", views.OSViewSet)
 router.register("itens", views.ItemOSViewSet, basename="itemos")
 router.register("fotos", views.FotoViewSet, basename="fotoos")

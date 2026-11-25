@@ -2,14 +2,12 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import ChecklistEntrada from '../components/ChecklistEntrada.vue'
 const router = useRouter()
 const TIPO_KEY = 'assistec.tipo-aparelho'
-const CHECKLIST_PADRAO = {
-  celular: 'Liga:\nTela:\nTouch:\nCâmeras:\nCarregamento:\nÁudio:\nObservações:',
-  outro: 'Liga:\nVídeo / sinal:\nDanos visíveis:\nObservações:',
-}
 const tipoSalvo = localStorage.getItem(TIPO_KEY)
 const clientes = ref([]), erro = ref(''), salvando = ref(false), novoCliente = ref(false)
+const respostas = reactive({}), checklistItens = ref([])
 const cli = reactive({ nome: '', telefone: '' })
 const f = reactive({
   cliente: '',
@@ -24,17 +22,15 @@ const f = reactive({
   defeito: '',
   status: 'em_analise',
   previsao_entrega: null,
-  checklist: '',
+  observacao_entrada: '',
 })
 onMounted(async () => {
   clientes.value = (await api('/clientes/?page_size=200')).results
-  if (!f.checklist.trim()) f.checklist = CHECKLIST_PADRAO[f.categoria] || ''
 })
 function mudarCategoria() {
   localStorage.setItem(TIPO_KEY, f.categoria)
   if (f.categoria === 'celular') f.tipo_aparelho = ''
   else f.imei = ''
-  if (!f.checklist.trim()) f.checklist = CHECKLIST_PADRAO[f.categoria] || ''
 }
 async function salvar() {
   erro.value = ''; salvando.value = true
@@ -44,6 +40,8 @@ async function salvar() {
       ...f,
       tipo_aparelho: f.categoria === 'celular' ? 'Celular' : f.tipo_aparelho.trim(),
       imei: f.categoria === 'celular' ? f.imei.trim() : '',
+      checklist_itens: checklistItens.value,
+      observacao_entrada: f.observacao_entrada.trim(),
     }
     const os = await api('/os/', { method: 'POST', body })
     router.push(`/os/${os.id}`)
@@ -85,9 +83,12 @@ async function salvar() {
       <label>Previsão de entrega<input v-model="f.previsao_entrega" type="date" /></label>
     </div>
     <div class="card">
-      <h2>Checklist de entrada</h2>
-      <p class="mudo">Registre o estado do aparelho ao receber. Fica registrado como prova.</p>
-      <label>Estado do aparelho na entrada / checklist<textarea v-model="f.checklist" rows="8"></textarea></label>
+      <ChecklistEntrada :categoria="f.categoria" :respostas="respostas" @update:checklist-itens="checklistItens = $event" />
+    </div>
+    <div class="card">
+      <h2>Observações (opcional)</h2>
+      <p class="mudo">Opcional. Escreva só o que não coube no checklist.</p>
+      <label>Observações<textarea v-model="f.observacao_entrada" rows="4" maxlength="2000"></textarea></label>
     </div>
     <div class="acoes">
       <button class="btn" :disabled="salvando">Abrir OS</button>
