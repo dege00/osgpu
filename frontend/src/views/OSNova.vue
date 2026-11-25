@@ -86,9 +86,8 @@ async function salvar() {
       <ChecklistEntrada :categoria="f.categoria" :respostas="respostas" @update:checklist-itens="checklistItens = $event" />
     </div>
     <div class="card">
-      <h2>Observações (opcional)</h2>
-      <p class="mudo">Opcional. Escreva só o que não coube no checklist.</p>
-      <label>Observações<textarea v-model="f.observacao_entrada" rows="4" maxlength="2000"></textarea></label>
+      <h2>Observações</h2>
+      <label>Opcional<textarea v-model="f.observacao_entrada" rows="4" maxlength="2000"></textarea></label>
     </div>
     <div class="acoes">
       <button class="btn" :disabled="salvando">Abrir OS</button>
