@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Assinatura from '../components/Assinatura.vue'
 import { api, auth, brl, dataBR, dataHoraBR, STATUS } from '../api'
@@ -7,8 +7,9 @@ import { comprimirImagem } from '../utils/imagem'
 import { urlMidia } from '../utils/midia'
 const route = useRoute(), router = useRouter()
 const os = ref(null), pecas = ref([]), erro = ref(''), msg = ref('')
-const inputCamera = ref(null), inputGaleria = ref(null)
+const inputCamera = ref(null), inputGaleria = ref(null), inputLaudo = ref(null)
 const enviandoFoto = ref(false), fotoAtual = ref(0), fotoTotal = ref(0), fotoSalvando = ref(null)
+const gerandoLaudo = ref(false)
 const LIMITE_FOTO_ORIGINAL = 20 * 1024 * 1024
 const item = reactive({ tipo: 'servico', peca: '', descricao: '', quantidade: 1, valor_unitario: '' })
 const forma = ref('pix'), valorPagamento = ref('')
@@ -41,6 +42,23 @@ onUnmounted(() => {
 
 const mudarStatus = wrap(async (s) => { os.value = await api(`/os/${os.value.id}/status/`, { method: 'POST', body: { status: s } }) })
 const salvarLaudo = wrap(async () => { await api(`/os/${os.value.id}/`, { method: 'PATCH', body: { laudo: os.value.laudo, desconto: os.value.desconto } }); await carregar(); msg.value = 'Salvo.' })
+const gerarLaudo = wrap(async () => {
+  gerandoLaudo.value = true
+  try {
+    const { texto } = await api(`/os/${os.value.id}/laudo-sugerido/`)
+    if ((os.value.laudo || '').trim() && !confirm('Substituir o laudo atual pelo laudo gerado automaticamente?')) return
+    os.value.laudo = texto
+    msg.value = 'Laudo gerado. Revise, complemente e clique em Salvar.'
+    await nextTick()
+    const area = inputLaudo.value
+    if (area) {
+      area.focus()
+      area.setSelectionRange(area.value.length, area.value.length)
+    }
+  } finally {
+    gerandoLaudo.value = false
+  }
+})
 const addItem = wrap(async () => {
   const body = { os: os.value.id, tipo: item.tipo, quantidade: item.quantidade }
   if (item.tipo === 'peca') body.peca = item.peca
@@ -195,7 +213,13 @@ const linkPublico = computed(() => os.value ? `${location.origin}/r/${os.value.t
         <div><span class="mudo">Total</span><h1>{{ brl(os.total) }}</h1>
           <span class="mudo" v-if="admin">Custo {{ brl(os.custo) }} · Lucro {{ brl(os.lucro) }}</span></div>
       </div>
-      <label>Laudo técnico<textarea v-model="os.laudo"></textarea></label>
+      <div class="campo-laudo">
+        <label for="laudo">Laudo técnico</label>
+        <div class="caixa-laudo">
+          <textarea id="laudo" ref="inputLaudo" v-model="os.laudo"></textarea>
+          <button type="button" class="chip btn-gerar-laudo" title="Gerar laudo automático" aria-label="Gerar laudo automático a partir do checklist e dos serviços" :disabled="gerandoLaudo" @click="gerarLaudo">🔄</button>
+        </div>
+      </div>
       <button class="btn" @click="salvarLaudo">Salvar laudo e desconto</button>
     </div>
 
@@ -268,4 +292,10 @@ const linkPublico = computed(() => os.value ? `${location.origin}/r/${os.value.t
 .icone-visivel { position: absolute; top: .3rem; right: .3rem; padding: 3px; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #14543B }
 .dica-camera { flex-basis: 100%; font-size: .75rem }
 .checklist-texto { white-space: pre-line; padding: .6rem .75rem; border: 1px solid var(--linha); border-radius: 8px; background: #fff }
+.campo-laudo { margin-top: 1rem }
+.campo-laudo > label { display: block }
+.caixa-laudo { position: relative }
+.caixa-laudo textarea { padding-right: 3.25rem }
+.btn-gerar-laudo { position: absolute; top: .55rem; right: .5rem; width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; background: rgba(255, 255, 255, .94) }
+.btn-gerar-laudo:disabled { opacity: .55; cursor: default }
 </style>

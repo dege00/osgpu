@@ -22,6 +22,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .estoque import baixar_estoque, baixar_itens, devolver_estoque, devolver_itens
 from .exportacao import exportar_clientes, exportar_pecas, resposta_xlsx
 from .imagens import processar_assinatura
+from .laudo import montar_laudo
 from .models import Cliente, FotoOS, ItemOS, Lancamento, OrdemServico, Peca, Usuario
 from .permissoes import ordens_visiveis
 from .pdf import gerar_pdf_os
@@ -176,6 +177,11 @@ class OSViewSet(LojaViewSet):
             if os_.pago >= os_.total:
                 os_.mudar_status(OrdemServico.Status.PAGO)
         return Response(OSSerializer(os_, context={"request": request}).data)
+
+    @action(detail=True, methods=["get"], url_path="laudo-sugerido")
+    def laudo_sugerido(self, request, pk=None):
+        os_ = self.get_object()
+        return Response({"texto": montar_laudo(os_)})
 
     @action(detail=True)
     def whatsapp(self, request, pk=None):
